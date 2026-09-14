@@ -11,7 +11,6 @@ app = Flask(__name__)
 def article():
     url = request.args.get("url", "")
 
-    # Only allow Sky News article URLs
     p = urlparse(url)
     if p.scheme != "https" or p.netloc != "news.sky.com":
         return jsonify({"error": "invalid URL"}), 400
@@ -24,33 +23,44 @@ def article():
         ) as browser:
 
             browser.open(url)
-            browser.sleep(3)
 
-            # Diagnostic information about the page we actually received.
+            # Give Sky/Akamai time to complete.
+            browser.sleep(10)
+
+            html = browser.get_page_source()
+
             debug = browser.execute_script("""
                 (() => {
-                    const scripts = [...document.querySelectorAll(
-                        'script[type="application/ld+json"]'
-                    )];
+                    const html = document.documentElement
+                        ? document.documentElement.outerHTML
+                        : '';
 
-                    return scripts.map((s, i) => ({
-                        index: i,
-                        length: s.textContent?.length || 0,
-                        hasArticleBody: /articleBody/i.test(
-                            s.textContent || ''
-                        ),
-                        hasHector: /Hector Patemore/i.test(
-                            s.textContent || ''
-                        ),
-                        preview: (s.textContent || '').substring(0, 500)
-                    }));
+                    return {
+                        readyState: document.readyState,
+                        title: document.title,
+                        bodyLength: document.body
+                            ? document.body.innerText.length
+                            : 0,
+                        htmlLength: html.length,
+                        hasAkamai: /akamai|access denied/i.test(html),
+                        hasHector: /Hector Patemore/i.test(html),
+                        hasSkyNews: /Sky News/i.test(html),
+                        hasArticleBody: /articleBody/i.test(html),
+                        jsonLdCount: document.querySelectorAll(
+                            'script[type="application/ld+json"]'
+                        ).length,
+                        bodyPreview: document.body
+                            ? document.body.innerText.substring(0, 1000)
+                            : '',
+                        htmlPreview: html.substring(0, 1000)
+                    };
                 })()
             """)
 
             return jsonify({
                 "url": browser.get_current_url(),
-                "title": browser.get_title(),
                 "debug": debug,
+                "htmlLengthPython": len(html),
             })
 
     except Exception as e:
