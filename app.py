@@ -11,6 +11,7 @@ app = Flask(__name__)
 def article():
     url = request.args.get("url", "")
 
+    # Only allow Sky News article URLs
     p = urlparse(url)
     if p.scheme != "https" or p.netloc != "news.sky.com":
         return jsonify({"error": "invalid URL"}), 400
@@ -21,32 +22,35 @@ def article():
             headless2=True,
             locale="en",
         ) as browser:
+
             browser.open(url)
             browser.sleep(3)
 
-            body = browser.execute_script("""
+            # Diagnostic information about the page we actually received.
+            debug = browser.execute_script("""
                 (() => {
-                    for (const s of document.querySelectorAll(
+                    const scripts = [...document.querySelectorAll(
                         'script[type="application/ld+json"]'
-                    )) {
-                        try {
-                            const d = JSON.parse(s.textContent || '');
-                            const items = Array.isArray(d) ? d : [d];
+                    )];
 
-                            for (const x of items) {
-                                if (x && x.articleBody) {
-                                    return x.articleBody;
-                                }
-                            }
-                        } catch (e) {}
-                    }
-
-                    return '';
+                    return scripts.map((s, i) => ({
+                        index: i,
+                        length: s.textContent?.length || 0,
+                        hasArticleBody: /articleBody/i.test(
+                            s.textContent || ''
+                        ),
+                        hasHector: /Hector Patemore/i.test(
+                            s.textContent || ''
+                        ),
+                        preview: (s.textContent || '').substring(0, 500)
+                    }));
                 })()
             """)
 
             return jsonify({
-                "articleBody": body or "",
+                "url": browser.get_current_url(),
+                "title": browser.get_title(),
+                "debug": debug,
             })
 
     except Exception as e:
