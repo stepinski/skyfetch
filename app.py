@@ -25,22 +25,24 @@ def article():
             browser.sleep(3)
 
             body = browser.execute_script("""
-                for (const s of document.querySelectorAll(
-                    'script[type="application/ld+json"]'
-                )) {
-                    try {
-                        const d = JSON.parse(s.textContent || '');
-                        const items = Array.isArray(d) ? d : [d];
+                (() => {
+                    for (const s of document.querySelectorAll(
+                        'script[type="application/ld+json"]'
+                    )) {
+                        try {
+                            const d = JSON.parse(s.textContent || '');
+                            const items = Array.isArray(d) ? d : [d];
 
-                        for (const x of items) {
-                            if (x && x.articleBody) {
-                                return x.articleBody;
+                            for (const x of items) {
+                                if (x && x.articleBody) {
+                                    return x.articleBody;
+                                }
                             }
-                        }
-                    } catch (e) {}
-                }
+                        } catch (e) {}
+                    }
 
-                return '';
+                    return '';
+                })()
             """)
 
             return jsonify({
